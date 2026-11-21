@@ -25,6 +25,8 @@ Document Owner: Đoàn Thị Bảo Ngân | Last Updated: 2026-11-08
 
 ![S-F04-04](img/S-F04-04.png)
 
+![M-F04-04 Voucher Code](img/S-F04-04-voucher-code.png)
+
 > Sample data only. Partner names, prices and stock in the image are placeholders.
 
 Layout overview:

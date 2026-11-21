@@ -25,6 +25,8 @@ Document Owner: Đoàn Thị Bảo Ngân | Last Updated: 2026-11-08
 
 ![S-F04-03](img/S-F04-03.png)
 
+![M-F04-02 Milestone Unlocked](img/S-F04-03-milestone-modal.png)
+
 > Sample data only. Amounts and zone names in the image are illustrative.
 
 Layout overview:
