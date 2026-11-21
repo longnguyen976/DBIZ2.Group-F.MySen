@@ -1,143 +1,143 @@
-# Screen Spec: S-F02-02 E-Ticket Checkout
+# Screen Spec: S-F02-02 Ticket Checkout & Payment
 
 | Field | Value |
 |---|---|
 | Screen ID | `S-F02-02` |
-| Screen name | E-Ticket Checkout |
+| Screen name | Ticket Checkout & Payment |
 | Actor | Visitor / GenZ Customer |
 | Priority | Must |
-| Feature | `F-02` E-Ticketing & Commerce |
-| Activity diagrams | `AD-UC-02A.md` (purchase; proposed `UC-02A` within W0 `UC-02`) |
+| Feature | `F-02 E-Ticketing & Wallet` |
+| Activity diagrams | `AD-UC-02B.md` |
 | Mockup image | `img/S-F02-02.png` |
 | Owner | Nguyễn Phạm Nguyệt Minh |
-| Status | Draft specification with complete template; pending team source/policy approval |
+| Status | Complete Specification |
 
-## 1. Purpose
-
-**Shown when:** A visitor enters Checkout with ticket type(s) and quantities, reviews the payable amount, confirms a PENDING order and selects MoMo/VNPay to pay.
-
-**The user leaves this screen when:** Verified payment **and** successful QR ticket issuance allow **View My Tickets** → `S-F02-03`, or the visitor returns to `S-F02-01` before order commit or to start another purchase after expiry.
-
-**Distinct internal stages** (one screen, not different Screen IDs): `ORDER_REVIEW` → `PENDING_PAYMENT` (visual label; authoritative **Order** enum is `PENDING`) → `PROVIDER_HANDOFF` → `VERIFYING_PAYMENT` → `TICKET_READY` / `PAYMENT_NOT_COMPLETED` / `ORDER_EXPIRED` / `TICKET_PROCESSING`. These are UI states, **not** additional approved backend enums. The provider's hosted payment page is outside MySen.
-
-**Source trace:** `AD-UC-02A` actor `a3/a4/a5`, system `s2–s10`, outcomes `d1/d2/d3`, external payment `g1`, timer `t1`; `FR-02-02`–`FR-02-09`. **The timer runs independently 15 minutes after order creation.**
-
-## 2. Mockup
-
-![S-F02-02 E-Ticket Checkout](img/S-F02-02.png)
-
-> One representative stage is illustrated. Loading, provider handoff, failure, expiration and success use the **same screen**, with conditional controls described below. Example Order ID and amount placeholders are not real payments.
-
-## 3. Element inventory
-
-| # | Element | Type | Content / data source | Required | Validation |
-|---|---|---|---|---|---|
-| 1 | `CheckoutHeader` | Header / Back button | “Checkout”; app back | Yes | Back allowed safely before payment; when payment in progress use team-approved safe-exit behavior |
-| 2 | `CheckoutFeatureLabel` | Text | “F-02 · Order review & payment” (mockup annotation) | No | Static / non-business |
-| 3 | `OrderSummary` | Card / list | Ticket name, quantity, price, server-computed total from W0 `Order, ticket & booking` / `Ticket catalogue` | Yes | Revalidate currently sellable items and quantities in `FR-02-02` |
-| 4 | `PayableAmount` | Text | Server-calculated `order.amount` (VND) | Yes | Must correspond to exact Order ID sent to gateway |
-| 5 | `OrderIdText` | Text | System-generated `order_id` | After confirmation | Never use a UI-generated ID |
-| 6 | `OrderStatusText` | Status text | **Order** only: W1 `PENDING`, `PAID`, `EXPIRED`; no fake Order FAILED enum | Conditional | Read authoritative server order state |
-| 7 | `PaymentStatusText` | Status text | **Payment** outcome separately: verifying / `SUCCESS`, `FAILED`, `CANCELLED` (provider response) | Conditional | User-facing text may differ, never rely on redirect alone |
-| 8 | `ConfirmOrderButton` | Primary button | “Confirm Order” in review stage | Conditional | Valid items, positive quantities, total revalidated; idempotent submit required |
-| 9 | `PaymentMethodOptions` | Radio group | MoMo / VNPay | After PENDING order | Exactly one selected; provider must be supported/configured |
-| 10 | `PayWithProviderButton` | Primary button | “Pay with MoMo” or “Pay with VNPay” | After provider choice | Existing unexpired PENDING order, exact amount, no duplicate in-flight submit |
-| 11 | `PaymentSecurityNote` | Info panel | “Payment success is verified by MySen before an e-ticket is issued.” | Yes | Must not promise success from user action |
-| 12 | `PaymentHandoffBanner` | Status / overlay | “Opening secure payment page…”; server-returned provider URL/QR | Conditional | Only trusted provider redirect/QR from `FR-02-03` |
-| 13 | `PaymentResultBanner` | Banner | Verifying/failed/cancelled/expired/issued/late paid/issuing QR status messages | Conditional | Derived from order + provider + ticket status; no terminal claim before verified state |
-| 14 | `OrderExpiryInfo` | Text | 15 minutes since `order.created_at`, **if** team permits a countdown UI | Conditional | Display source server time, not client-only timer; 15-min backend rule still applies without visual countdown |
-| 15 | `RetryPaymentButton` | Secondary button | “Try Again” after failed/cancelled | Conditional | Must check unexpired order and **unapproved retry policy**; no automatic order reuse |
-| 16 | `StartNewPurchaseButton` | Secondary button | “Start New Purchase” when expired | Conditional | Must start new order flow, never revive EXPIRED |
-| 17 | `ViewTicketsButton` | Primary button | “View My Tickets” | Only when PAID and ticket issued | Must confirm ticket/QR record exists |
-| 18 | `RefreshStatusButton` | Secondary button | “Check Status” if provider result delayed | Conditional | Read-only status refresh; no duplicate initiation |
-| 19 | `BottomNavigation` | Shared app navigation | MySen / Tickets / Account (if retained by team shell) | Conditional | F-00/F-01 routes owned by team, not local F-02 IDs |
-
-## 4. States
-
-| State | What the user sees | Trigger |
-|---|---|---|
-| Default | Review selected items, amount and **Confirm Order**. After successful order creation (`PENDING`) this same screen shows Order ID, provider radio options and **Pay with…** action. | Valid selection passed from Catalogue; `FR-02-02` order created. |
-| Empty (no data) | “No tickets selected. Browse tickets to continue.”; no order/payment action. | Missing/cleared selection or deep link without eligible order. |
-| Loading | “Creating order…”, “Opening payment…”, or “Verifying payment…”; action disabled; no QR. | `FR-02-02/03`, redirect-return, callback verification or state refresh in progress. |
-| Error | Separate conditions: order validation failure; gateway initiation fails; provider `FAILED/CANCELLED`; independent `EXPIRED` after 15 min; invalid/late callback requires status review. Specific copy and retry/restart action. | `FR-02-02/03/05/06/07`; AD `d1` rejected / `d2` failure / `d3` expiry. |
-| Success / confirmation | For `PAID` **while issuance pending**, display “Payment confirmed. Your ticket is being prepared.”; only after `FR-02-08/09` succeeds show “Your e-ticket is ready” and View My Tickets. | First valid SUCCESS callback commits PAID once and ticket issuance confirms. |
-
-## 5. Interactions and navigation
-
-| # | Element | User action | System response | Goes to screen |
-|---|---|---|---|---|
-| 1 | Entry from Catalogue | Open Checkout with selection | Revalidate selection/current catalogue; show summary or validation error. | `S-F02-02` |
-| 2 | `ConfirmOrderButton` | Tap Confirm Order | Atomically create **one** server `PENDING` order with unique Order ID, items, price and visitor association; prevent accidental duplicate submissions. | stays |
-| 3 | `PaymentMethodOptions` | Select MoMo or VNPay | Record chosen configured provider without yet treating order as paid. | stays |
-| 4 | `PayWithProviderButton` | Tap Pay with chosen gateway | Invoke `FR-02-03` for the **exact** PENDING order and server amount; open trusted external provider URL or QR. | stays (external handoff) |
-| 5 | External provider | Customer authorizes/cancels/returns | Show verifying state, fetch authoritative backend result; do not treat return URL as SUCCESS. | `S-F02-02` |
-| 6 | Gateway webhook (no user action) | Received by MySen | Validate authenticity, order ID, amount, payment status and replay (`FR-02-07`); valid SUCCESS/PENDING → PAID **once** (`FR-02-04`). | stays |
-| 7 | `PaymentResultBanner` | Observe successful server state | If PAID but issuance pending, show processing; when issued records exist, enable View My Tickets. | stays |
-| 8 | `ViewTicketsButton` | Tap View My Tickets | Fetch visitor-linked issued ticket record with authorized QR. | `S-F02-03` |
-| 9 | Failed/cancelled result | Customer taps Try Again | Only if server permits a new payment attempt and order remains eligible; **same Order ID behavior TBD**. Otherwise offer a new purchase. | `S-F02-02` (conditional) |
-| 10 | `StartNewPurchaseButton` | Tap Start New Purchase | Return to ticket selection for a **new** order; no EXPIRED order can issue ticket. | `S-F02-01` |
-| 11 | `RefreshStatusButton` | Tap Check Status | Read-only query of payment/order/issuance; does not trigger a duplicate charge. | stays |
-| 12 | Expiry job (no user action) | 15 min after order creation | If still unpaid PENDING without verified successful callback, mark EXPIRED; no ticket issuance. | stays |
-| 13 | Invalid / duplicate callback (no user action) | Received by MySen | Reject / acknowledge safely without duplicate paid transition or ticket. Wrong-order/amount never marks PAID. | stays |
-| 14 | Valid late SUCCESS after EXPIRED | Received by MySen | Do **not** issue a ticket or silently mark PAID; show generic review status until finance policy is approved. | stays |
-| 15 | `CheckoutHeader` | Tap Back before order confirmed | Return to selection with local selected items; once order exists follow safe-exit policy. | `S-F02-01` (if safe) |
-| 16 | `BottomNavigation` | Navigate through shared app shell | Follow shared navigation policy (pending); order state remains backend-owned. | stays (shared route TBD) |
-
-## 6. Screen-level rules
-
-| Rule ID | Rule | Source |
-|---|---|---|
-| `SR-F02-02-01` | Only valid ticket selections create a unique PENDING order with authoritative total. | `FR-02-02`; `AD-UC-02A s2` |
-| `SR-F02-02-02` | A payment transaction refers to the exact existing order and amount. | `FR-02-03`; `AD-UC-02A s3` |
-| `SR-F02-02-03` | Payment SUCCESS is established by authenticated provider webhook / server verification, **not** by a user returning from checkout. | `FR-02-04/07`; `AD-UC-02A s4/s5` |
-| `SR-F02-02-04` | Verify callback origin/signature, transaction match and replay protection; duplicate callback cannot create duplicate ticket/payment effects. | `FR-02-07`; AD `d1` invalid/duplicate branch |
-| `SR-F02-02-05` | Provider `FAILED/CANCELLED` leads to failure guidance and **no ticket issuance**; it is a payment outcome, not necessarily an approved Order FAILED state. | `FR-02-05`; `AD-UC-02A s8` |
-| `SR-F02-02-06` | Unpaid PENDING expires 15 minutes after **order creation** without verified success; expired order cannot issue ticket. | `FR-02-06`; `AD-UC-02A t1/d3/s10` |
-| `SR-F02-02-07` | A PAID order's purchased ticket(s) and protected QR(s) are issued only after valid verified payment; no duplicate issuance. | `FR-02-08/09`; `AD-UC-02A s6/s7` |
-| `SR-F02-02-08` | A valid late SUCCESS after EXPIRED triggers unresolved financial reconciliation; UI must not claim a refund or resurrect the order. | `AD-UC-02A` §6 Q2 |
-| `SR-F02-02-09` | Retry on failed/cancelled payment is provisional; no silent reuse of an Order ID before approval. | `AD-UC-02A` §6 Q3 |
-| `SR-F02-02-10` | Server PAID with pending QR issuance shows **processing** rather than a scannable ticket; duplicate issuance prevented by backend. | UC-02 Sequence issuance-failure branch; `FR-02-08/09` |
-
-## 7. Linked requirements
-
-| FR ID | What this screen does for it |
-|---|---|
-| `FR-02-02` | Confirm selection, create PENDING order and show unique Order ID/amount. |
-| `FR-02-03` | Select MoMo/VNPay, initiate payment and hand off to provider. |
-| `FR-02-04` | Show PAID only after backend authenticates a matching SUCCESS webhook. |
-| `FR-02-05` | Show FAILED/CANCELLED payment result and permitted recovery without issuing ticket. |
-| `FR-02-06` | Show EXPIRED from independent 15-minute unpaid-order process. |
-| `FR-02-07` | Correct UI effect from secure/idempotent callback behavior; backend-only logic is not an extra screen. |
-| `FR-02-08` | Show issuance-processing/ready status and View My Tickets link only after issued ticket exists. |
-| `FR-02-09` | Depend on secure QR generation but display QR itself only in Ticket Wallet. |
-
-## 8. Responsive and accessibility notes
-
-- Smallest supported width: proposed **360 CSS px** pending team agreement; summary, provider options and status messages stack.
-- Label the provider radio group, status updates and Order ID; use `aria-live`-equivalent behavior for asynchronous state changes.
-- Body contrast ≥4.5:1, touch targets ≥24×24 CSS pixels, status conveyed in text and never colour alone (Lesson 8 template).
-- Provider return flow should retain a visible path back to MySen; actual deep-link/browser configuration is an open interface question.
-- Never place unapproved real prices, refund assurances or timeout promises in the mockup; 15-minute business rule is backed by W1, but time remaining depends on server time.
-
-## 9. Open questions
-
-| # | Question | Blocking? | Status |
-|---|---|---|---|
-| 1 | Which single official order enum is used: W1 `PENDING` or sequence alias `PENDING_PAYMENT`? | Yes — data model | Open; draft uses W1 `PENDING` |
-| 2 | What happens when genuine provider SUCCESS arrives after server EXPIRED? Finance, reconciliation, reversal and customer message? | Yes — financial integrity | Open; no ticket/refund automatically claimed |
-| 3 | Are retry attempts allowed, and do they reuse the same Order ID, create a new payment reference, or start a new order? | Yes — flow | Open |
-| 4 | Does purchasing require login? How is visitor identity associated with order and wallet? | Yes — F-01 integration | Open |
-| 5 | How does provider checkout return (deep link, browser, QR), and how is delayed verification polled/reconciled? | Yes — integration | Open |
-| 6 | What recovery process/status applies when PAID is committed but e-ticket QR issuance later fails? | Yes — delivery | Open |
-| 7 | Will proposed `UC-02A` be accepted in W0? Is 15-minute timer a separate technical Use Case? | Yes — traceability | Open |
+Document Owner: Nguyễn Phạm Nguyệt Minh | Last Updated: 2026-11-22
 
 ---
 
-## Completion checklist
+## 1. Purpose
 
-- [x] Separate PNG, with conditional controls specified outside the representative mockup state.
-- [x] Every visible/control element inventoried with source/validation.
-- [x] Five states and success/error branches described.
-- [x] All targets reference existing F-02 screens or expressly external team routes.
-- [x] `AD-UC-02A` success/fail/invalid/duplicate/timeout logic and `FR-02-02`–`09` linked.
-- [ ] Payment financial-resolution and team integration approvals pending.
+**Shown when:** The visitor continues with tickets chosen on `S-F02-01`, to review the order, create an Order, pay through MoMo or VNPay, verify the payment and receive the result.
+
+**The user leaves this screen when:** The visitor taps View My Tickets after ticket issuance, opening `S-F02-03`, or returns to `S-F02-01` before order creation or to start a new purchase where the order state permits.
+
+**Source trace:** `AD-UC-02B.md` / `FR-02-02`. Ticket cancellation/refund requests are a proposed extension within the same FR; the current W1 EARS does not specify its detailed refund workflow.
+
+## 2. Mockup
+
+![S-F02-02 — Checkout Review](img/S-F02-02.png)
+
+![S-F02-02 — Pending Payment](img/S-F02-02-pending.png)
+
+![S-F02-02 — Payment Results](img/S-F02-02-result.png)
+
+### Layout Overview
+- **Top Navigation Bar:** MS logo, Back action, checkout title and avatar.
+- **Order Review Area:** Ticket types, quantities, amount and Confirm Booking action.
+- **Payment Stage:** Order reference, pending status, MoMo/VNPay selector, payment deadline information and provider-specific action.
+- **Result Area:** Verification, success, failure and expiration are separate runtime states, even where combined in review screenshots.
+- **Recovery Actions:** Check Status, Retry Payment and Start New Purchase appear only when applicable.
+- **Bottom Navigation Bar:** Home / Tickets / My Tickets / Account.
+
+> Prices, order identifiers and payment results shown in the mockups are illustrative. Multiple outcomes visible in a review image are mutually exclusive at runtime.
+
+## 3. Element Inventory
+
+| # | Element | Type | Content / Data Source | Required | Validation / Rule |
+|---|---|---|---|---|---|
+| 1 | `CheckoutHeader` | Header | MS logo, checkout/payment-result heading, Back and avatar | Yes | Safe Back behavior based on payment state |
+| 2 | `CheckoutFeatureLabel` | Text / progress | F-02 label and Review → Confirm → Pay → Receive Ticket sequence | Optional | Visual progress is not authoritative server status |
+| 3 | `OrderSummary` | Card | Ticket names, quantities, unit prices, provisional/final total | Yes (review) | All payable prices computed by server |
+| 4 | `PayableAmount` | Amount | Server-confirmed Order total | Yes | Must equal amount sent to payment provider |
+| 5 | `OrderIdText` | Text | Server-generated order ID; screenshot sample `MS-261122-001` | After order creation | Screenshot identifiers are illustrative only |
+| 6 | `OrderStatusText` | Status chip | Pending / Paid / Expired | Conditional | Display server-authoritative order state only |
+| 7 | `PaymentStatusText` | Status text | Verifying / Success / Failed / Cancelled | Conditional | Redirect return alone must not imply payment success |
+| 8 | `ConfirmOrderButton` | Primary CTA | Confirm Booking | Review only | Enabled only for validated items and quantities |
+| 9 | `PaymentMethodOptions` | Radio group | MoMo / VNPay | Pending only | Exactly one supported provider selected; never simulate provider approval |
+| 10 | `PayWithProviderButton` | Primary CTA | Pay with MoMo / VNPay | Pending only | Only for eligible unexpired Order and configured provider |
+| 11 | `PaymentSecurityNote` | Info banner | QR tickets are issued only after successful verified payment | Yes | Must not promise issuance while verification is pending |
+| 12 | `PaymentHandoffBanner` | Progress banner | Handoff to secure payment gateway | Conditional | Payment URL/QR must originate from backend/provider |
+| 13 | `PaymentResultBanner` | Result card | Verified payment and issued ticket; verification pending; failed or expired result | Conditional | Separate state messaging and actionable next step |
+| 14 | `OrderExpiryInfo` | Warning banner | Illustrative 15-minute payment window | Conditional | Design assumption, not explicit current W1 EARS; server time governs |
+| 15 | `RetryPaymentButton` | Secondary action | Retry Payment | Conditional | Server must permit retry on an eligible order; prevent duplicate charges |
+| 16 | `StartNewPurchaseButton` | Secondary action | Start New Purchase | Expired | Start a new order flow; never revive an expired order |
+| 17 | `ViewTicketsButton` | Primary / secondary CTA | View My Tickets | Confirmed payment + ticket issued | Enabled only after ticket/QR record exists |
+| 18 | `RefreshStatusButton` | Secondary action | Check Status / Refresh Status | Pending / unknown | Read-only status refresh; no repeat payment initiation |
+| 19 | `BottomNavigation` | App shell | Home / Tickets / My Tickets / Account | Yes | Tickets tab active |
+| 20 | `DeviceStatusBar` | Device shell | 09:41, 5G, battery | Yes (mockup) | Device-frame illustration only |
+
+## 4. States
+
+| State | What the User Sees | Trigger |
+|---|---|---|
+| Default / Review | Order summary, payable total and Confirm Booking | Ticket selection received from `S-F02-01` |
+| Empty | Prompt to select tickets; no Order created; return to catalogue | No tickets in selection |
+| Loading / Verifying | Progress messaging with duplicate actions disabled; no live QR before confirmation | Order creation or payment verification in progress |
+| Error | Specific failure explanation; Retry/New Purchase only when appropriate | Order creation failure, failed/cancelled payment, or expiry |
+| Success / Confirmation | Verified success and View My Tickets navigation | Server confirms provider payment and QR tickets have been issued |
+
+**UI-only substates:** `ORDER_REVIEW`, `PENDING`, `VERIFYING_PAYMENT`, `PAID_ISSUING`, `TICKET_READY`, `PAYMENT_NOT_COMPLETED`, `EXPIRED`. These are design labels, not assertions about a formally approved backend state enum.
+
+## 5. User Interaction & Events
+
+| # | Element | User Action | System Response | Goes to Screen |
+|---|---|---|---|---|
+| 1 | Entry from catalogue | Tap Continue to Checkout on `S-F02-01` | Revalidate ticket type, quantity and price; show summary | `S-F02-02` |
+| 2 | `ConfirmOrderButton` | Tap Confirm Booking | Create one server-assigned Order with final amount; mark pending | Stays |
+| 3 | `PaymentMethodOptions` | Select MoMo or VNPay | Record choice; do not mark paid | Stays |
+| 4 | `PayWithProviderButton` | Tap Pay | Handoff using verified payment request | External provider; returns to `S-F02-02` |
+| 5 | Return from gateway | Return to application | Fetch authoritative payment state from backend | Stays |
+| 6 | Provider callback | Gateway sends payment result | Verify reference, amount and message authenticity; prevent duplicate ticket issuance | Stays |
+| 7 | `PaymentResultBanner` | Receive verified success | Issue ticket/QR only after verification; show Ticket Processing if incomplete | Stays |
+| 8 | `ViewTicketsButton` | Tap View My Tickets | Retrieve issued tickets owned by current visitor | `S-F02-03` |
+| 9 | `RetryPaymentButton` | Tap Retry Payment | Check eligibility and retry policy before starting another attempt | Stays |
+| 10 | `RefreshStatusButton` | Tap Check Status | Read stored status without reinitiating payment | Stays |
+| 11 | `StartNewPurchaseButton` | Tap Start New Purchase | Return to catalogue for new selection/order | `S-F02-01` |
+| 12 | Expiry event | Backend checks order deadline | Expire unpaid order and block ticket issuance | Stays |
+| 13 | `CheckoutHeader` | Tap Back before order creation | Return to catalogue; after gateway handoff apply safe-exit policy | `S-F02-01` or approved safe route |
+| 14 | Cancellation/refund extension | Submit request from Ticket Wallet | Check eligibility and route for manual review under proposed policy | Entry `S-F02-03`; business handling `FR-02-02` |
+
+## 6. Screen-Level Rules
+
+| Rule ID | Rule | Source |
+|---|---|---|
+| `SR-F02-02-01` | The server recalculates ticket prices and quantities at Order creation; catalogue subtotals are indicative. | `FR-02-02` / `AD-UC-02B` |
+| `SR-F02-02-02` | Orders require a unique server ID; repeated button taps must not create duplicate Orders. | `FR-02-02` — implementation rule |
+| `SR-F02-02-03` | Gateway callbacks must be verified server-side; returning to the app is not proof of success. | `FR-02-02` — implementation rule |
+| `SR-F02-02-04` | Do not issue usable tickets or QR credentials before payment confirmation. | W1 EARS `FR-02-02` |
+| `SR-F02-02-05` | Duplicate callbacks must not issue multiple tickets; amount and order reference must match. | `FR-02-02` — proposed safeguard |
+| `SR-F02-02-06` | The 15-minute expiry shown in the draft must be confirmed by the team before release. | `AD-UC-02B` / design assumption |
+| `SR-F02-02-07` | A genuine late success after expiry must not silently reactivate an expired Order; financial reconciliation remains unresolved. | `AD-UC-02B` — open question |
+| `SR-F02-02-08` | Cancelling an unpaid payment attempt is distinct from cancelling/refunding an already paid ticket. | `AD-UC-02B` |
+| `SR-F02-02-09` | Ticket refunds remain a proposed extension of `FR-02-02`; do not claim money was refunded without review and verified settlement. | W0 scope restriction; `AD-UC-02B` |
+
+## 7. Linked Requirements
+
+| FR ID | Priority | What This Screen Does For It |
+|---|---|---|
+| `FR-02-02` | Must | Reviews checkout, creates Orders, integrates MoMo/VNPay, displays payment verification and issues QR tickets after confirmed payment. Cancellation/refund remains a proposed extension, not accepted W1 EARS. |
+| `FR-02-01` | Must (related function) | Receives catalogue-selected tickets and revalidates them before checkout. |
+| `FR-02-03` | Must (related function) | Navigates to Ticket Wallet after ticket issuance. |
+
+## 8. Responsive & Accessibility Notes
+
+**Responsive Adaptations:**
+- Reference design: 390 × 844 px mobile frame. Content must remain scrollable, and fixed actions must not obstruct interactive content or the onscreen keyboard.
+- Visual system: Be Vietnam Pro, light background `#F8FAFC`, primary action color `#059669`. Visible product copy remains Vietnamese in the approved mockups; this specification is written in English.
+- Touch targets must meet the UI Conventions minimum of 24 × 24 CSS pixels; larger targets are preferred for touch devices. Body text contrast must be at least 4.5:1.
+- Availability, progress and error conditions require readable text, not color alone. Controls need accessible labels; asynchronous updates should be announced using an `aria-live`-equivalent region.
+- The device status bar and shared bottom navigation belong to the application shell and do not introduce additional Screen IDs.
+
+- MoMo/VNPay radio options need accessible labels; payment results must be announced in text and not by icon alone.
+- On return from an external payment provider, always read verified backend status. Offer status refresh if connectivity fails.
+
+## 9. Open Questions
+
+| # | Question | Blocking? | Default Applied |
+|---|---|---|---|
+| 1 | Are payment retries, order-ID reuse, payment attempts and the 15-minute deadline formally approved? | Yes | Unconfirmed; do not interpret draft UX as production policy. |
+| 2 | How are unknown provider callbacks, reconciliation and late verified successes handled? | Yes | Unconfirmed; no automatic refund or order revival presumed. |
+| 3 | What recovery applies when payment succeeds but QR issuance is delayed or fails? | Yes | Show processing until a real ticket exists; recovery policy pending. |
+| 4 | What are cancellation eligibility, manual approval roles and original-provider refund rules? | Yes | Proposed extension only; no automatic refund presumed. |
+| 5 | Should the combined success/warning/error review mockup be separated into runtime states? | No / To confirm | Show only the state applicable to the actual transaction. |
