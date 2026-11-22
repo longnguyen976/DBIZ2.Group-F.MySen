@@ -1,8 +1,5 @@
 # MySen UC-02 – Sequence Diagrams
 
-**Source:** [MySen_UC02_Sequence_Diagrams.drawio, user-edited Google Drive file](https://drive.google.com/file/d/1xZsWSi166soYMKW5wmlL2r1gfAsyfXsZ/view?usp=sharing)
-
-Converted from the content, messages, arrow directions and UML combined fragments of the linked draw.io file. All proposed policies and source labels are retained as authored.
 
 ## SEQ-UC02-A — Browse E-Ticket Catalogue
 
