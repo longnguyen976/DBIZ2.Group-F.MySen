@@ -101,7 +101,7 @@ DBIZ2.Group-F.MySen/
 Follow the reading order below to review the complete analysis and design package from business context down to UI specifications:
 
 1. **Scope & Problem Context:**
-   * [Project Scope & Inventory](docs/project/w0-scope.md)
+   * [Project Scope & Inventory](docs/function-list/w0-scope.md)
    * [Customer Value Chain Analysis (CVCA)](docs/context/cvca.md)
    * [System Context Diagram](docs/context/context-diagram.md)
 2. **Architecture & Technical Decisions:**
